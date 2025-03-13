@@ -7,7 +7,7 @@ The **Hospital Elevator Control System** is a **PLC simulation-based** model des
 
 While the primary focus is on **logic implementation and simulation**, a **hardware prototype** will also be developed using **LEDs, buttons, and an Arduino** for demonstration.
 
-![Alt Text](assets/ElevatorConceptDesigns-ElevatorSetup.png)
+![Alt Text](./assets/ElevatorConceptDesigns-ElevatorSetup.png)
 
 ## 📌 Key Features
 - **Multi-level (5 floors, 2 shafts)** system with **priority access** and **special modes**
