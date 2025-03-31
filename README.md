@@ -1,49 +1,70 @@
-# Elevate_PLC_Control
+# 🛠️ Hardware Prototype – Elevate_PLC_Control
 
-# 🚀 Hospital Elevator Control System
+## 🚧 Arduino-Based Elevator Physics Model
 
-## 🏗️ Project Overview
-The **Hospital Elevator Control System** is a **PLC simulation-based** model designed for a hospital environment. This system incorporates **advanced elevator control logic** to handle diverse scenarios while ensuring compliance with **industry safety and regulatory standards**. 
-
-While the primary focus is on **logic implementation and simulation**, a **hardware prototype** will also be developed using **LEDs, buttons, and an Arduino** for demonstration.
-
-![Alt Text](./assets/ElevatorConceptDesigns-ElevatorSetup.png)
-
-## 📌 Key Features
-- **Multi-level (5 floors, 2 shafts)** system with **priority access** and **special modes**
-- **Operational modes:** Normal, Floor Priority, Emergency (Fire Mode), Service Mode, Lock-out Mode
-- **User Interface:** LED signals, buttons, current floor indicators, and RFID staff access
-- **Accessibility Features:** Braille buttons, audio indicators for visually impaired users
-- **Safety Features:** Emergency stop, door sensors, service mode key switches
-
-## 🏗️ System Components
-### **Hardware**
-- **PLC**: Omron CP1H
-- **Prototype Components**: Arduino, LEDs, buttons, sensors
-
-### **Software**
-- Omron CX-One
-- Git
-- MATLAB & Simulink
-- MATLAB App Designer
-
-## 🏆 Success & Evaluation Criteria
-The project will be evaluated based on:
-- ✅ **Core Requirements**: Meeting all functional specifications
-- ✅ **Operational Accuracy**: Proper execution of elevator modes
-- ✅ **Safety Compliance**: Adherence to hospital safety protocols
-- ✅ **Usability**: Accessibility features and emergency response handling
-
-
-## 📢 Team Members
-**Team Name:** Elevate  
-- Beau Edwards-Dart  
-- Charles Kipping  
-- Ethan-Josef Gito  
-- James Wahbe  
-- Joshua Gonzalez  
-- Miriam Maher  
-
-**Product Owner:** Quang Ha  
+This branch documents the **hardware prototype** of the **Elevate PLC Control System**, focusing on the **Arduino-based implementation** of a simplified **elevator car physics model**. It simulates motion control using **real-time physics**, featuring a **PID control loop**, basic force modeling, and a visual user interface via an **OLED display**.
 
 ---
+
+## 🔧 Prototype Highlights
+
+- 🎛️ **Arduino Simulation** of a single elevator shaft  
+- ⚙️ **PID Control Loop** to manage position, velocity, and motor output  
+- 🧮 **Force Model**: Incorporates gravity, motor force, and friction using `F = ma`  
+- 📊 **Real-Time Visualization** with **OLED Display**
+- 🟢 **Status LEDs** to indicate floor requests and system states  
+
+---
+
+## 📦 Hardware Components
+
+- **Arduino Uno / Nano**  
+- **OLED Display** (e.g., SSD1306) 
+
+---
+
+## 🧠 Control Logic
+
+### PID Control
+
+- Simulates elevator movement 
+- Uses **position error** to compute motor voltage  
+- Graphs:
+  - Motor voltage output
+  - Elevator position
+  - Velocity response
+
+### Elevator Physics
+
+- Discrete time simulation using:
+  - `F = ma`
+  - Net force = motor force – gravity – friction
+  - Position and velocity update at fixed timestep
+
+---
+
+## 🖥️ Interface
+
+- **OLED Screen**:
+  - Visualizes motor voltage, position, and velocity in real time  
+
+
+---
+
+## ✅ Prototype Goals
+
+- [x] Model simple elevator movement logic  
+- [x] Implement and tune PID controller  
+- [x] Simulate and display physics-based motion  
+- [x] Provide interactive floor selection  
+
+---
+
+## 🧑‍💻 Contributors (Hardware Team)
+
+- Joshua Gonzalez *(Physics Modeling & Display Logic)*  
+- Miriam Maher *(OpenPLC & PID Control)*  
+
+Project branch of: **Elevate PLC Control System**  
+Main branch: [Hospital Elevator Control System](https://github.com/yourrepo/Elevate_PLC_Control)  
+Product Owner: **Quang Ha**
