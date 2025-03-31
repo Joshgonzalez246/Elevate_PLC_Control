@@ -1,49 +1,25 @@
-# Elevate_PLC_Control
+# 🧪 MATLAB Simulations – Elevate_PLC_Control
 
-# 🚀 Hospital Elevator Control System
+## 📊 Elevator Physics & Control Investigation
 
-## 🏗️ Project Overview
-The **Hospital Elevator Control System** is a **PLC simulation-based** model designed for a hospital environment. This system incorporates **advanced elevator control logic** to handle diverse scenarios while ensuring compliance with **industry safety and regulatory standards**. 
+This branch is dedicated to **simulation and control modeling** of complex elevator systems using **MATLAB and Simulink**. It serves as a testing ground for **PID controller development**, **multi-floor motion profiles**, and **realistic physics-based behavior** prior to simpler hardware implementation.
 
-While the primary focus is on **logic implementation and simulation**, a **hardware prototype** will also be developed using **LEDs, buttons, and an Arduino** for demonstration.
+---
 
-![Alt Text](./assets/ElevatorConceptDesigns-ElevatorSetup.png)
+## 🎯 Objectives
 
-## 📌 Key Features
-- **Multi-level (5 floors, 2 shafts)** system with **priority access** and **special modes**
-- **Operational modes:** Normal, Floor Priority, Emergency (Fire Mode), Service Mode, Lock-out Mode
-- **User Interface:** LED signals, buttons, current floor indicators, and RFID staff access
-- **Accessibility Features:** Braille buttons, audio indicators for visually impaired users
-- **Safety Features:** Emergency stop, door sensors, service mode key switches
+- 🔬 Investigate advanced elevator car dynamics beyond ideal linear motion
+- ⚙️ Simulate force-based motion including:
+  - Mass, gravity, friction, and counterweight effects
+- 🧠 Design and tune **PID controllers** for position and velocity control
+- 📈 Analyze system response to step changes and floor transitions
 
-## 🏗️ System Components
-### **Hardware**
-- **PLC**: Omron CP1H
-- **Prototype Components**: Arduino, LEDs, buttons, sensors
+---
 
-### **Software**
-- Omron CX-One
-- Git
-- MATLAB & Simulink
-- MATLAB App Designer
+## 🛠 Tools Used
 
-## 🏆 Success & Evaluation Criteria
-The project will be evaluated based on:
-- ✅ **Core Requirements**: Meeting all functional specifications
-- ✅ **Operational Accuracy**: Proper execution of elevator modes
-- ✅ **Safety Compliance**: Adherence to hospital safety protocols
-- ✅ **Usability**: Accessibility features and emergency response handling
-
-
-## 📢 Team Members
-**Team Name:** Elevate  
-- Beau Edwards-Dart  
-- Charles Kipping  
-- Ethan-Josef Gito  
-- James Wahbe  
-- Joshua Gonzalez  
-- Miriam Maher  
-
-**Product Owner:** Quang Ha  
+- **MATLAB** (Control Systems Toolbox, Simulink)
+- **Simulink** for block-based modeling of physical systems
+- **MATLAB App Designer** for optional UI prototyping
 
 ---
