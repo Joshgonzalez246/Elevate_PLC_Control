@@ -31,9 +31,9 @@ const float brakingFriction = 40;    // Friction force when braking (N)
 const float brakingZone = 1.5;       // Distance (m) within which braking is applied
 
 // PID controller parameters (Needs tuning)
-float Kp = 3;
-float Ki = 0.5;
-float Kd = 8;
+float Kp = 2.5;
+float Ki = 0.8;
+float Kd = 4;
 
 // Integral anti-windup limits
 const float integralMax = 50.0;
@@ -75,44 +75,97 @@ void setup() {
   }
 }
 
+// Elevator states
+enum ElevatorState { TO_6M, TO_9M, TO_0M, IDLE };
+ElevatorState state = TO_6M;
+
+const float positionTolerance = 0.05;  // Meters
+const float velocityTolerance = 1.0;   // m/s
+bool brakeEngaged = false;
+
 void loop() {
   unsigned long currentTime = millis();
   if (currentTime - lastTime >= dt * 1000) {
     lastTime = currentTime;
-    
-    // Cycle through 3 positions, from 0 m to 6 m
-    if (currentTime - simulationStartTime >= 2000) {
-      targetPosition = 6.0;
+
+    // --- Elevator State Machine ---
+    switch (state) {
+      case TO_6M:
+        targetPosition = 6.0;
+        if (abs(position - targetPosition) < positionTolerance && abs(velocity) < velocityTolerance) {
+          brakeEngaged = true;
+          velocity = 0;
+          acceleration = 0;
+          state = TO_9M;
+        }
+        break;
+      case TO_9M:
+        targetPosition = 9.0;
+        if (abs(position - targetPosition) < positionTolerance && abs(velocity) < velocityTolerance) {
+          brakeEngaged = true;
+          velocity = 0;
+          acceleration = 0;
+          state = TO_0M;
+        }
+        break;
+      case TO_0M:
+        targetPosition = 0.0;
+        if (abs(position - targetPosition) < positionTolerance && abs(velocity) < velocityTolerance) {
+          brakeEngaged = true;
+          velocity = 0;
+          acceleration = 0;
+          state = IDLE;
+        }
+        break;
+      case IDLE:
+        targetPosition = position;
+        brakeEngaged = true;
+        velocity = 0;
+        acceleration = 0;
+        break;
     }
 
-    // Change the target position from 6 m to 9m
-    if (currentTime - simulationStartTime >= 10000) {
-      targetPosition = 9;
+    // --- Check if brake should be released ---
+    if (abs(targetPosition - position) > positionTolerance) {
+      brakeEngaged = false;  // Release brake if target has changed
     }
 
-    // Change the target position from 9 m to 0m
-    if (currentTime - simulationStartTime >= 20000) {
-      targetPosition = 0;
+    float motorForce = 0;
+    float voltageCommand = 0;
+
+    if (!brakeEngaged) {
+      // --- PID Control ---
+      error = targetPosition - position;
+      integral += error * dt;
+      integral = constrain(integral, integralMin, integralMax);
+      derivative = (error - lastError) / dt;
+      float pidOutput = Kp * error + Ki * integral + Kd * derivative;
+      voltageCommand = constrain(pidOutput, -maxVoltage, maxVoltage);
+      lastError = error;
+
+      // --- Motor Force ---
+      motorForce = motorForceConst * voltageCommand;
+
+      // --- Holding Assist ---
+      // Simulate slight holding torque to prevent elevator falling on release
+      float holdingTorque = mass * g * 0.9;  // 90% of gravity
+      if (abs(velocity) < 0.2 && abs(error) < 1.0) {
+        motorForce += holdingTorque;  // apply small upward assist
+      }
+
+    } else {
+      // Brake engaged: no voltage or motion
+      voltageCommand = 0;
+      motorForce = 0;
+      error = 0;
+      integral = 0;
+      derivative = 0;
     }
-    
-    // ---- PID Control Calculation ---- //
-    error = targetPosition - position;
-    
-    // Update integral term and apply anti-windup limits
-    integral += error * dt;
-    if (integral > integralMax) integral = integralMax;
-    if (integral < integralMin) integral = integralMin;
-    
-    derivative = (error - lastError) / dt;
-    float pidOutput = Kp * error + Ki * integral + Kd * derivative;
-    float voltageCommand = constrain(pidOutput, -maxVoltage, maxVoltage);
-    lastError = error;
-    
-    // ---- Force Calculations ---- //
-    float motorForce = motorForceConst * voltageCommand;
+
+    // --- Forces ---
     float gravityForce = mass * g;
-    
-    // Use increased friction if within braking zone
+
+    // Friction (depends on velocity)
     float currentFriction = (abs(targetPosition - position) < brakingZone) ? brakingFriction : baselineFriction;
     float frictionForce = 0;
     if (velocity > 0.01) {
@@ -120,19 +173,32 @@ void loop() {
     } else if (velocity < -0.01) {
       frictionForce = currentFriction;
     }
-    
-    // Compute net force (upward positive)
+
     float netForce = motorForce + frictionForce - gravityForce;
-    acceleration = netForce / mass;
-    
-    // Euler integration to update state
-    velocity += acceleration * dt;
-    position += velocity * dt;
-    
-    // ---- Debug Output ---- //
+
+    // --- Physics integration ---
+    if (!brakeEngaged) {
+      acceleration = netForce / mass;
+      velocity += acceleration * dt;
+      position += velocity * dt;
+    } else {
+      acceleration = 0;
+      velocity = 0;
+    }
+
+    // --- Debug Output ---
     Serial.print("Time: ");
     Serial.print((currentTime - simulationStartTime) / 1000.0);
-    Serial.print(" s, Target: ");
+    Serial.print(" s, State: ");
+    switch (state) {
+      case TO_6M: Serial.print("TO_6M"); break;
+      case TO_9M: Serial.print("TO_9M"); break;
+      case TO_0M: Serial.print("TO_0M"); break;
+      case IDLE: Serial.print("IDLE"); break;
+    }
+    Serial.print(", Brake: ");
+    Serial.print(brakeEngaged ? "ON" : "OFF");
+    Serial.print(", Target: ");
     Serial.print(targetPosition);
     Serial.print(" m, Pos: ");
     Serial.print(position);
@@ -142,16 +208,13 @@ void loop() {
     Serial.print(voltageCommand);
     Serial.print(" V, Error: ");
     Serial.println(error);
-    
-    // ---- Update Graph Buffer ---- //
-    // Shift the buffer left one pixel
+
+    // --- Graph Update ---
     for (int i = 0; i < GRAPH_WIDTH - 1; i++) {
       posBuffer[i] = posBuffer[i + 1];
     }
-    // Append the current position to the rightmost pixel
     posBuffer[GRAPH_WIDTH - 1] = position;
-    
-    // ---- Draw Graph on OLED ---- //
+
     drawGraph();
   }
 }
