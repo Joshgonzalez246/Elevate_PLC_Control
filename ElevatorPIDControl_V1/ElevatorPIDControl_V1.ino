@@ -23,6 +23,7 @@ const float dt = 0.1;
 // Motor
 const float motorForceConst = 20.0;
 const float maxVoltage = 12.0;
+float voltageCommand = 0;
 
 // Friction
 const float baselineFriction = 5.0;
@@ -56,6 +57,7 @@ enum ElevatorState {
   TO_9M, DOOR_OPENING_9M, DOOR_WAIT_9M,
   TO_0M, DOOR_OPENING_0M, DOOR_WAIT_0M
 };
+
 ElevatorState state = TO_6M;
 unsigned long doorOpenStartTime = 0;
 const unsigned long doorDelay = 2000;
@@ -72,7 +74,7 @@ void setup() {
   lastTime = millis();
   simulationStartTime = millis();
 
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3D)) {
     Serial.println("SSD1306 allocation failed");
     while (true);
   }
@@ -192,7 +194,7 @@ void loop() {
     }
 
     float motorForce = 0;
-    float voltageCommand = 0;
+    voltageCommand = 0;
 
     if (!brakeEngaged && pidEnabled) {
       error = targetPosition - position;
@@ -277,6 +279,8 @@ void loop() {
     display.print(position, 1);
     display.print(" V:");
     display.print(velocity, 1);
+    display.print(" U:");
+    display.print(voltageCommand, 1);
     display.print(" ");
     display.print(brakeEngaged ? "B:ON" : "B:OFF");
 
