@@ -3,46 +3,50 @@
 // Version 4
 //***************************************************************************************
 
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+//******* Libraries *******
+#include <Wire.h>               // I2C library for communication
+#include <Adafruit_GFX.h>       // Core graphics library
+#include <Adafruit_SSD1306.h>   // OLED display driver library
 
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
+//******* OLED Object Definitions *******
+#define SCREEN_WIDTH 128        // OLED screen width in pixels
+#define SCREEN_HEIGHT 64        // OLED screen height in pixels
+#define OLED_RESET -1           // No reset pin
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-#define GRAPH_WIDTH SCREEN_WIDTH
-float posBuffer[GRAPH_WIDTH];
+#define GRAPH_WIDTH SCREEN_WIDTH  // Graph width is same as screen width
+float posBuffer[GRAPH_WIDTH];     // Buffer to hold recent position values for graphing
 
-// Simulation parameters
-const float mass = 10.0;
-const float g = 9.81;
-const float dt = 0.1;
+//******* Simulation Constants *******
+const float mass = 10.0;   // Elevator Mass (kg)
+const float g = 9.81;     // Gravity (m/s)
+const float dt = 0.1;     // Time step for simulation (s)
 
-// Motor
-const float motorForceConst = 20.0;
-const float maxVoltage = 12.0;
-float voltageCommand = 0;
+//******* Motor Properties *******
+const float motorForceConst = 20.0;    // Force output per volt to motor
+const float maxVoltage = 12.0;         // Max voltage to motor
+float voltageCommand = 0;              // Global PID output to display
 
-// Friction
+//******* Friction parameters *******
 const float baselineFriction = 5.0;
 const float brakingFriction = 30.0;
 const float descentBrakingFriction = 80.0;
-const float brakingZone = 1.5;
+const float brakingZone = 1.5;         // Distance newar target to begin applying brakes
 
-// PID
+//******* PID Controller Parameters *******
+//  (Need to tune properly at some point)
 float Kp = 2;
 float Ki = 0.8;
 float Kd = 4;
 
+//Max integral term values to account for anti-windup
 const float integralMax = 50.0;
 const float integralMin = -50.0;
 
 float error = 0.0, lastError = 0.0, integral = 0.0, derivative = 0.0;
 bool pidEnabled = true;
 
-// Elevator state
+//******* Elevator States *******
 float position = 0.0;
 float velocity = 0.0;
 float acceleration = 0.0;
@@ -51,17 +55,21 @@ float targetPosition = 0.0;
 unsigned long lastTime = 0;
 unsigned long simulationStartTime = 0;
 
-// FSM
+//******* FSM for Elevator position *******
 enum ElevatorState {
   TO_6M, DOOR_OPENING_6M, DOOR_WAIT_6M,
   TO_9M, DOOR_OPENING_9M, DOOR_WAIT_9M,
   TO_0M, DOOR_OPENING_0M, DOOR_WAIT_0M
 };
 
-ElevatorState state = TO_6M;
+ElevatorState state = TO_6M;          //Current state
+
+// Door opening and closing timing
 unsigned long doorOpenStartTime = 0;
 const unsigned long doorDelay = 2000;
 
+// Degree of error to allow EM brakes to be engaged
+// to correctly lock to floor
 const float positionTolerance = 0.05;
 const float velocityTolerance = 0.05;
 bool brakeEngaged = false;
@@ -69,11 +77,13 @@ bool brakeEngaged = false;
 enum LastFloor { FLOOR_9, FLOOR_0 };
 LastFloor lastFloor = FLOOR_0;
 
+//******* Initial Setup *******
 void setup() {
   Serial.begin(9600);
   lastTime = millis();
   simulationStartTime = millis();
 
+  // Initialize the OLED display
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3D)) {
     Serial.println("SSD1306 allocation failed");
     while (true);
@@ -81,21 +91,24 @@ void setup() {
   display.clearDisplay();
   display.display();
 
+  // Initialize position graph with zeros
   for (int i = 0; i < GRAPH_WIDTH; i++) {
     posBuffer[i] = position;
   }
 }
 
+//******* Main Loop *******
 void loop() {
   unsigned long currentTime = millis();
   if (currentTime - lastTime >= dt * 1000) {
     lastTime = currentTime;
 
-    // --- FSM ---
+    // Finite State Machine for elevator operation
     switch (state) {
       case TO_6M:
         pidEnabled = true;
         targetPosition = 6.0;
+        // Transition to door open if position is close enough and velocity low
         if ((abs(position - targetPosition) < positionTolerance && abs(velocity) < velocityTolerance) ||
             (velocity < 0 && position < targetPosition)) {
           brakeEngaged = true;
@@ -189,6 +202,7 @@ void loop() {
         break;
     }
 
+    // If target is far, allow braking to disengage
     if (abs(targetPosition - position) > positionTolerance) {
       brakeEngaged = false;
     }
@@ -196,6 +210,7 @@ void loop() {
     float motorForce = 0;
     voltageCommand = 0;
 
+    //******* PID Logic *******
     if (!brakeEngaged && pidEnabled) {
       error = targetPosition - position;
       integral += error * dt;
@@ -203,10 +218,12 @@ void loop() {
       derivative = (error - lastError) / dt;
       float pidOutput = Kp * error + Ki * integral + Kd * derivative;
 
+      // Suppress jitter near target position
       if (abs(error) < positionTolerance && abs(velocity) < 0.1) {
         pidOutput = 0;
       }
 
+      // Dampen overshoot
       if (targetPosition < position && velocity < -0.5) {
         pidOutput -= 2.0 * velocity;
       }
@@ -216,6 +233,7 @@ void loop() {
 
       motorForce = motorForceConst * voltageCommand;
 
+      // Assist when nearly stationary
       if (abs(velocity) < 0.2 && abs(error) < 1.0) {
         motorForce += mass * g * 0.7;
       }
@@ -225,6 +243,7 @@ void loop() {
       motorForce = 0;
     }
 
+    // Forces
     float gravityForce = mass * g;
 
     float currentFriction = baselineFriction;
@@ -235,13 +254,17 @@ void loop() {
     }
 
     float frictionForce = -currentFriction * velocity;
+
+    // Assist stopping when descending fast
     float brakeAssist = 0.0;
     if (velocity < -0.1 && position > targetPosition) {
       brakeAssist = 70.0;
     }
 
+    // Net force = motor + friction + assist - gravity
     float netForce = motorForce + frictionForce + brakeAssist - gravityForce;
 
+    // Update kinematics if not braking
     if (!brakeEngaged) {
       acceleration = netForce / mass;
       velocity += acceleration * dt;
@@ -251,6 +274,7 @@ void loop() {
       velocity = 0;
     }
 
+    // Clamp position to minimum
     if (position < 0.0) {
       position = 0.0;
       velocity = 0.0;
@@ -258,13 +282,15 @@ void loop() {
       brakeEngaged = true;
     }
 
+    // --- Graph Buffer Update ---
     for (int i = 0; i < GRAPH_WIDTH - 1; i++) {
       posBuffer[i] = posBuffer[i + 1];
     }
     posBuffer[GRAPH_WIDTH - 1] = position;
 
+    // --- OLED Display Update ---
     display.clearDisplay();
-    drawGraph();
+    drawGraph();  // Draw line graph of position
 
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
@@ -274,6 +300,7 @@ void loop() {
     else if (state == TO_9M || state == DOOR_OPENING_9M || state == DOOR_WAIT_9M) display.print("9M");
     else if (state == TO_0M || state == DOOR_OPENING_0M || state == DOOR_WAIT_0M) display.print("0M");
 
+    // Parameters to display on OLED
     display.setCursor(0, 58);
     display.print("P:");
     display.print(position, 1);
@@ -284,21 +311,24 @@ void loop() {
     display.print(" ");
     display.print(brakeEngaged ? "B:ON" : "B:OFF");
 
-    display.display();
+    display.display();  // Push buffer to screen
   }
 }
 
+//******* Draw position vs. time graph *******
 void drawGraph() {
   for (int x = 0; x < GRAPH_WIDTH - 1; x++) {
     float pos1 = posBuffer[x];
     float pos2 = posBuffer[x + 1];
 
+    // Scale 0-10 meters into 48 vertical pixels
     int y1 = SCREEN_HEIGHT - 17 - (int)((pos1 / 10.0) * 48);
     int y2 = SCREEN_HEIGHT - 17 - (int)((pos2 / 10.0) * 48);
 
     display.drawLine(x, y1, x + 1, y2, SSD1306_WHITE);
   }
-
+    
+  // Draw horizontal line at target position
   int targetY = SCREEN_HEIGHT - 17 - (int)((targetPosition / 10.0) * 48);
   display.drawLine(0, targetY, SCREEN_WIDTH, targetY, SSD1306_WHITE);
 }
