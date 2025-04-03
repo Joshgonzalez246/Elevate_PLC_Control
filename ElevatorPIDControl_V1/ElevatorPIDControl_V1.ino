@@ -1,3 +1,8 @@
+//***************************************************************************************
+// Simple Elevator Physics Model with PID Control Loop
+// Version 4
+//***************************************************************************************
+
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -34,6 +39,7 @@ const float integralMax = 50.0;
 const float integralMin = -50.0;
 
 float error = 0.0, lastError = 0.0, integral = 0.0, derivative = 0.0;
+bool pidEnabled = true;
 
 // Elevator state
 float position = 0.0;
@@ -45,12 +51,21 @@ unsigned long lastTime = 0;
 unsigned long simulationStartTime = 0;
 
 // FSM
-enum ElevatorState { TO_6M, TO_9M, TO_0M, IDLE };
+enum ElevatorState {
+  TO_6M, DOOR_OPENING_6M, DOOR_WAIT_6M,
+  TO_9M, DOOR_OPENING_9M, DOOR_WAIT_9M,
+  TO_0M, DOOR_OPENING_0M, DOOR_WAIT_0M
+};
 ElevatorState state = TO_6M;
+unsigned long doorOpenStartTime = 0;
+const unsigned long doorDelay = 2000;
 
 const float positionTolerance = 0.05;
-const float velocityTolerance = 1.0;
+const float velocityTolerance = 0.05;
 bool brakeEngaged = false;
+
+enum LastFloor { FLOOR_9, FLOOR_0 };
+LastFloor lastFloor = FLOOR_0;
 
 void setup() {
   Serial.begin(9600);
@@ -77,37 +92,98 @@ void loop() {
     // --- FSM ---
     switch (state) {
       case TO_6M:
+        pidEnabled = true;
         targetPosition = 6.0;
-        if (abs(position - targetPosition) < positionTolerance && abs(velocity) < velocityTolerance) {
+        if ((abs(position - targetPosition) < positionTolerance && abs(velocity) < velocityTolerance) ||
+            (velocity < 0 && position < targetPosition)) {
           brakeEngaged = true;
           velocity = 0;
           acceleration = 0;
-          state = TO_9M;
+          pidEnabled = false;
+          error = 0; integral = 0; derivative = 0; lastError = 0;
+          doorOpenStartTime = currentTime;
+          state = DOOR_OPENING_6M;
         }
         break;
-      case TO_9M:
-        targetPosition = 9.0;
-        if (abs(position - targetPosition) < positionTolerance && abs(velocity) < velocityTolerance) {
-          brakeEngaged = true;
-          velocity = 0;
-          acceleration = 0;
-          state = TO_0M;
-        }
-        break;
-      case TO_0M:
-        targetPosition = 0.0;
-        if (abs(position - targetPosition) < positionTolerance && abs(velocity) < velocityTolerance) {
-          brakeEngaged = true;
-          velocity = 0;
-          acceleration = 0;
-          state = IDLE;
-        }
-        break;
-      case IDLE:
-        targetPosition = position;
+
+      case DOOR_OPENING_6M:
         brakeEngaged = true;
         velocity = 0;
         acceleration = 0;
+        error = 0; integral = 0; derivative = 0; lastError = 0;
+        if (currentTime - doorOpenStartTime >= doorDelay) {
+          state = DOOR_WAIT_6M;
+        }
+        break;
+
+      case DOOR_WAIT_6M:
+        if (lastFloor == FLOOR_0) {
+          state = TO_9M;
+          lastFloor = FLOOR_9;
+        } else {
+          state = TO_0M;
+          lastFloor = FLOOR_0;
+        }
+        break;
+
+      case TO_9M:
+        pidEnabled = true;
+        targetPosition = 9.0;
+        if ((abs(position - targetPosition) < positionTolerance && abs(velocity) < velocityTolerance) ||
+            (velocity < 0 && position < targetPosition)) {
+          brakeEngaged = true;
+          velocity = 0;
+          acceleration = 0;
+          pidEnabled = false;
+          error = 0; integral = 0; derivative = 0; lastError = 0;
+          doorOpenStartTime = currentTime;
+          state = DOOR_OPENING_9M;
+        }
+        break;
+
+      case DOOR_OPENING_9M:
+        brakeEngaged = true;
+        velocity = 0;
+        acceleration = 0;
+        error = 0; integral = 0; derivative = 0; lastError = 0;
+        if (currentTime - doorOpenStartTime >= doorDelay) {
+          state = DOOR_WAIT_9M;
+        }
+        break;
+
+      case DOOR_WAIT_9M:
+        state = TO_6M;
+        break;
+
+      case TO_0M:
+        pidEnabled = true;
+        targetPosition = 0.0;
+        if ((abs(position - targetPosition) < positionTolerance && abs(velocity) < velocityTolerance) ||
+            (velocity < 0 && position < targetPosition) ||
+            (position <= 0.0)) {
+          brakeEngaged = true;
+          position = 0.0;
+          velocity = 0;
+          acceleration = 0;
+          pidEnabled = false;
+          error = 0; integral = 0; derivative = 0; lastError = 0;
+          doorOpenStartTime = currentTime;
+          state = DOOR_OPENING_0M;
+        }
+        break;
+
+      case DOOR_OPENING_0M:
+        brakeEngaged = true;
+        velocity = 0;
+        acceleration = 0;
+        error = 0; integral = 0; derivative = 0; lastError = 0;
+        if (currentTime - doorOpenStartTime >= doorDelay) {
+          state = DOOR_WAIT_0M;
+        }
+        break;
+
+      case DOOR_WAIT_0M:
+        state = TO_6M;
         break;
     }
 
@@ -118,8 +194,7 @@ void loop() {
     float motorForce = 0;
     float voltageCommand = 0;
 
-    if (!brakeEngaged) {
-      // PID Control
+    if (!brakeEngaged && pidEnabled) {
       error = targetPosition - position;
       integral += error * dt;
       integral = constrain(integral, integralMin, integralMax);
@@ -130,7 +205,6 @@ void loop() {
         pidOutput = 0;
       }
 
-      // Apply additional damping if descending
       if (targetPosition < position && velocity < -0.5) {
         pidOutput -= 2.0 * velocity;
       }
@@ -147,14 +221,10 @@ void loop() {
     } else {
       voltageCommand = 0;
       motorForce = 0;
-      error = 0;
-      integral = 0;
-      derivative = 0;
     }
 
     float gravityForce = mass * g;
 
-    // --- Friction ---
     float currentFriction = baselineFriction;
     if (velocity < -0.1 && position > targetPosition) {
       currentFriction = descentBrakingFriction;
@@ -163,11 +233,9 @@ void loop() {
     }
 
     float frictionForce = -currentFriction * velocity;
-
-    // --- Active Brake Assist ---
     float brakeAssist = 0.0;
     if (velocity < -0.1 && position > targetPosition) {
-      brakeAssist = 70.0;  // Try increasing if needed
+      brakeAssist = 70.0;
     }
 
     float netForce = motorForce + frictionForce + brakeAssist - gravityForce;
@@ -181,42 +249,18 @@ void loop() {
       velocity = 0;
     }
 
-    // --- Serial Debug ---
-    Serial.print("Time: ");
-    Serial.print((currentTime - simulationStartTime) / 1000.0);
-    Serial.print(" s, State: ");
-    switch (state) {
-      case TO_6M: Serial.print("TO_6M"); break;
-      case TO_9M: Serial.print("TO_9M"); break;
-      case TO_0M: Serial.print("TO_0M"); break;
-      case IDLE: Serial.print("IDLE"); break;
+    if (position < 0.0) {
+      position = 0.0;
+      velocity = 0.0;
+      acceleration = 0.0;
+      brakeEngaged = true;
     }
-    Serial.print(", Brake: ");
-    Serial.print(brakeEngaged ? "ON" : "OFF");
-    Serial.print(", Target: ");
-    Serial.print(targetPosition);
-    Serial.print(" m, Pos: ");
-    Serial.print(position);
-    Serial.print(" m, Vel: ");
-    Serial.print(velocity);
-    Serial.print(" m/s, Volt: ");
-    Serial.print(voltageCommand);
-    Serial.print(" V | MotorF: ");
-    Serial.print(motorForce);
-    Serial.print(" N | FricF: ");
-    Serial.print(frictionForce);
-    Serial.print(" N | BrakeA: ");
-    Serial.print(brakeAssist);
-    Serial.print(" N | Gravity: ");
-    Serial.println(gravityForce);
 
-    // --- Graph Update ---
     for (int i = 0; i < GRAPH_WIDTH - 1; i++) {
       posBuffer[i] = posBuffer[i + 1];
     }
     posBuffer[GRAPH_WIDTH - 1] = position;
 
-    // --- OLED Display ---
     display.clearDisplay();
     drawGraph();
 
@@ -224,12 +268,9 @@ void loop() {
     display.setTextColor(SSD1306_WHITE);
     display.setCursor(0, 50);
     display.print("STATE: ");
-    switch (state) {
-      case TO_6M: display.print("TO_6M"); break;
-      case TO_9M: display.print("TO_9M"); break;
-      case TO_0M: display.print("TO_0M"); break;
-      case IDLE:  display.print("IDLE "); break;
-    }
+    if (state == TO_6M || state == DOOR_OPENING_6M || state == DOOR_WAIT_6M) display.print("6M");
+    else if (state == TO_9M || state == DOOR_OPENING_9M || state == DOOR_WAIT_9M) display.print("9M");
+    else if (state == TO_0M || state == DOOR_OPENING_0M || state == DOOR_WAIT_0M) display.print("0M");
 
     display.setCursor(0, 58);
     display.print("P:");
