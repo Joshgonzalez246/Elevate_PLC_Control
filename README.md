@@ -1,20 +1,21 @@
-# 🧾 PLC Development Model 2 – Elevate_PLC_Control
+# 🧾 PLC Development Model 3 – Elevate_PLC_Control
 
-## 🤖 Codesys Dual Shaft Model
+## 🤖 Omron Single Shaft Model
 
-This branch focuses on developing the **PLC-side logic** for the Elevate control system using **Codesys**.
+This branch focuses on developing the **Physical Model logic** for the Elevate control system using **Omron** and the **CP1H** PLC.
+
+![Alt Text](./assets/Physical-Model.png)
 
 ---
 
 ## 🎯 Objectives
 
-- ⚙️ Implement **Dual Shaft Elevator Logic**
-- 🔄 Set up **Animation** of Dual Elevator
+- ⚙️ Implement **Single Shaft 3 floor Elevator Logic**
 
 ---
 
 ## 💻 Tools & Technologies
 
-- **Codesys**
+- **Omron Programmer**
 
 ---
